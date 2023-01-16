@@ -63,6 +63,22 @@ userSchema.methods = {
       }
     );
   },
+
+  // forget password token
+  generateForgotPasswordToken: function () {
+    const forgotToken = crypto.randomBytes(20).toString("hex");
+
+    // saving to database
+    this.forgotPasswordToken = crypto
+      .createHash("sha256")
+      .update(forgotToken)
+      .digest("hex"); //encrypting the token & creating random hash before storing in db
+
+    this.forgotPasswordExpiry = Date.now() + 20 * 60 * 1000;
+
+    // return token values to user
+    return forgotToken;
+  },
 };
 
 export default mongoose.model("User", userSchema);
