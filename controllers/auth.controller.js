@@ -7,6 +7,7 @@ import crypto from "crypto";
 
 /******************************************************
  * @SIGNUP
+ * @REQUEST_TYPE POST
  * @route http://localhost:5000/api/auth/signup
  * @description User signUp Controller for creating new user
  * @parameters name, email, password
@@ -49,6 +50,7 @@ export const signUp = asyncHandler(async (req, res) => {
 
 /******************************************************
  * @LOGIN
+ * @REQUEST_TYPE POST
  * @route http://localhost:5000/api/auth/login
  * @description User signIn Controller for loging user
  * @parameters  email, password
@@ -89,6 +91,7 @@ export const login = asyncHandler(async (req, res) => {
 
 /******************************************************
  * @LOGOUT
+ * @REQUEST_TYPE GET
  * @route http://localhost:5000/api/auth/logout
  * @description User logout by clearing user cookies
  * @parameters
@@ -109,6 +112,7 @@ export const logout = asyncHandler(async (_req, res) => {
 
 /******************************************************
  * @FORGOT_PASSWORD
+ * @REQUEST_TYPE POST
  * @route http://localhost:5000/api/auth/password/forgot
  * @description User will submit email and we will generate a token
  * @parameters  email
@@ -165,6 +169,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 
 /******************************************************
  * @RESET_PASSWORD
+ * @REQUEST_TYPE POST
  * @route http://localhost:5000/api/auth/password/reset/:resetToken
  * @description User will be able to reset password based on url token
  * @parameters  token from url, password and confirm pass
@@ -215,31 +220,54 @@ export const resetPassword = asyncHandler(async (req, res) => {
   });
 });
 
-/******************************************************
- * @UPDATE_PASSWORD
- * @route http://localhost:5000/api/auth/update/
- * @description User will able to update password based only if he is login (middleware will check wheter user is loggedIn or not)
- * @parameters  userid from req.user body will be inserted by route, oldPassword and newPassword
- * @returns User object
- ******************************************************/
+/**
+ * @CHANGE_PASSWORD
+ * @REQUEST_TYPE POST
+ * @route http://localhost:4000/api/auth/password/change
+ * @description Logged in User will submit old & new password to update with new credentials
+ * @parameters oldPassword, newPassword and confirmPassword
+ * @return User object
+ */
+export const changePassword = asyncHandler(async (req, res) => {
+  const { email } = req.user;
 
-export const updatePassword = asyncHandler(async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
-
-  if (!oldPassword || !newPassword) {
-    throw new CustomError("Both new and old password requried", 400);
+  if (!email) {
+    throw new CustomError("Not logged in, please try again", 400);
   }
 
-  // req.user will be inserted by middleware in route file
-  const user = await User.findById(req.user.id);
+  const { oldPassword, newPassword, confirmNewPassword } = req.body;
 
+  if (!oldPassword || !newPassword || !confirmNewPassword) {
+    throw new CustomError("All fields are required", 400);
+  }
+
+  if (newPassword !== confirmNewPassword) {
+    throw new CustomError("New & Confirm password donot match", 400);
+  }
+
+  // check for user
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new CustomError("User not found", 404);
+  }
+
+  // validate oldPassword entered with DB records
+  const oldPasswordValidation = user.comparePassword(oldPassword);
+  if (!oldPasswordValidation) {
+    throw new CustomError("Old password is invalid", 404);
+  }
+
+  // Update password record with new details
   user.password = newPassword;
-  user.save();
+  await user.save();
 
-  // send message to frontend
+  const token = user.getJwtToken();
+  user.password = undefined;
+
+  res.cookie("token", token, cookieOptions);
   res.status(200).json({
     success: true,
-    message: "Password updated successfully",
+    user,
   });
 });
 
